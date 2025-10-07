@@ -1,5 +1,5 @@
 # roblox-cookie-fetcher
-Custom web scraper for fetching a Roblox account's cookie, given you have the account's username and password which should be put in a `.env` file. (see `.example.env` for example)
+Custom web scraper for fetching a Roblox account's cookie, __given you have the account's username and password__ which should be put in a `.env` file. (see `.example.env` for example)
 
 If you get hit with the CAPTCHA error, you'll need to first manually sign in via a browser before trying again a few minutes later with the container.
 
