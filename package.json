@@ -1,0 +1,30 @@
+{
+  "name": "roblox-cookie-fetcher",
+  "version": "1.0.0",
+  "description": "Custom web scraper for fetching a Roblox account's cookie, given you have the account's username and password which should be put in a `.env` file. (see `.example.env` for example)",
+  "keywords": [],
+  "homepage": "https://github.com/Bluegamerdog/cookie-fetcher#readme",
+  "bugs": {
+    "url": "https://github.com/Bluegamerdog/cookie-fetcher/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Bluegamerdog/cookie-fetcher.git"
+  },
+  "license": "ISC",
+  "author": "",
+  "type": "module",
+  "main": "main.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "fetch": "node main.js"
+  },
+  "dependencies": {
+    "dotenv": "^17.2.1",
+    "puppeteer": "^24.18.0",
+    "puppeteer-extra": "^3.3.6",
+    "puppeteer-extra-plugin-stealth": "^2.11.2",
+    "random-useragent": "^0.5.0"
+  },
+  "devDependencies": {}
+}
