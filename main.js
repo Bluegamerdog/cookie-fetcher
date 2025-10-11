@@ -33,6 +33,7 @@ const password = process.env.ROBLOX_PASS;
     browser = await puppeteer.launch({
       headless: runHeadless,
       args: [
+        "--incognito",
         "--no-sandbox",
         "--disable-setuid-sandbox",
         "--disable-dev-shm-usage",
