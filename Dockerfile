@@ -1,27 +1,46 @@
-FROM node:20-slim
+# Use official Node 20 image (Debian Bullseye base)
+FROM node:20-bullseye
 
-# Install puppeteer dependencies
-RUN apt-get update && apt-get install -y \
-    wget curl gnupg ca-certificates \
-    fonts-liberation libnss3 libx11-xcb1 libxcomposite1 libxcursor1 \
-    libxdamage1 libxext6 libxfixes3 libxi6 libxrandr2 libgbm1 libpangocairo-1.0-0 \
-    libpango-1.0-0 libcups2 libatk1.0-0 libatk-bridge2.0-0 libasound2 libgtk-3-0 \
+# Install Chromium dependencies required by Puppeteer
+RUN apt-get update -y && \
+    apt-get install -y --no-install-recommends \
+    ca-certificates \
+    fonts-liberation \
+    libasound2t64 \
+    libatk-bridge2.0-0 \
+    libatk1.0-0 \
+    libcups2 \
+    libdbus-1-3 \
+    libdrm2 \
+    libgbm1 \
+    libgtk-3-0 \
+    libnss3 \
+    libx11-xcb1 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxkbcommon0 \
+    libxrandr2 \
+    libxshmfence1 \
+    lsb-release \
+    wget \
+    xdg-utils \
     && rm -rf /var/lib/apt/lists/*
 
-# Create app directory
-WORKDIR /app
+# Create working directory
+WORKDIR /home/container
 
-# Copy package.json / package-lock.json first for caching
+# Copy package files first to leverage Docker layer caching
 COPY package*.json ./
 
-# Install dependencies
-RUN npm ci --omit=dev
+# Install dependencies (Puppeteer will auto-install Chromium unless you skip it)
+RUN npm ci
 
-# Copy script
+# Copy remaining source files
 COPY . .
 
-# Environment variables should be passed at runtime
-ENV ROBLOX_USER=""
-ENV ROBLOX_PASS=""
+# Set environment variables for Puppeteer (helps in CI/CD or Cloud Run)
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=false \
+    PUPPETEER_CACHE_DIR=/home/container/.cache/puppeteer
 
-CMD ["node", "fetch-cookie.js"]
+# Run the script
+CMD ["npm", "run", "fetch"]
