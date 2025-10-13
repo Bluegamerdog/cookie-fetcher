@@ -6,7 +6,7 @@ RUN apt-get update -y && \
     apt-get install -y --no-install-recommends \
     ca-certificates \
     fonts-liberation \
-    libasound2t64 \
+    libasound2 \
     libatk-bridge2.0-0 \
     libatk1.0-0 \
     libcups2 \
@@ -32,15 +32,15 @@ WORKDIR /home/container
 # Copy package files first to leverage Docker layer caching
 COPY package*.json ./
 
-# Install dependencies (Puppeteer will auto-install Chromium unless you skip it)
+# Set environment variables for Puppeteer
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=false
+ENV PUPPETEER_CACHE_DIR=/home/container/.cache/puppeteer
+
+# Install dependencies
 RUN npm ci
 
 # Copy remaining source files
 COPY . .
-
-# Set environment variables for Puppeteer (helps in CI/CD or Cloud Run)
-ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=false \
-    PUPPETEER_CACHE_DIR=/home/container/.cache/puppeteer
 
 # Run the script
 CMD ["npm", "run", "fetch"]

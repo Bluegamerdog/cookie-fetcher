@@ -21,10 +21,9 @@
   },
   "dependencies": {
     "dotenv": "^17.2.1",
-    "puppeteer": "^24.18.0",
+    "puppeteer": "^24.24.0",
     "puppeteer-extra": "^3.3.6",
     "puppeteer-extra-plugin-stealth": "^2.11.2",
     "random-useragent": "^0.5.0"
-  },
-  "devDependencies": {}
+  }
 }

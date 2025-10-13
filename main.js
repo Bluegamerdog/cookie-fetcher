@@ -1,11 +1,14 @@
-import puppeteer from "puppeteer";
+import puppeteer from "puppeteer-extra";
 import { configDotenv } from "dotenv";
+import StealthPlugin from "puppeteer-extra-plugin-stealth";
 
 configDotenv();
 
 const runHeadless = process.env.RUN_HEADLESS;
 const username = process.env.ROBLOX_USER;
 const password = process.env.ROBLOX_PASS;
+
+puppeteer.use(StealthPlugin());
 
 (async () => {
   let browser;
@@ -41,6 +44,10 @@ const password = process.env.ROBLOX_PASS;
       ],
     });
     const page = await browser.newPage();
+
+    await page.setExtraHTTPHeaders({
+      "accept-language": "en-US,en;q=0.9",
+    });
 
     console.log("Navigated to https://www.roblox.com/login...");
     await page.goto("https://www.roblox.com/login", {
