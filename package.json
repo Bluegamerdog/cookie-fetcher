@@ -20,6 +20,7 @@
     "fetch": "node main.js"
   },
   "dependencies": {
+    "capsolver-npm": "^2.1.10",
     "dotenv": "^17.2.1",
     "puppeteer": "^24.24.0",
     "puppeteer-extra": "^3.3.6",
