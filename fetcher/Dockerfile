@@ -43,4 +43,4 @@ RUN npm ci
 COPY . .
 
 # Run the script
-CMD ["npm", "run", "server"]
+CMD ["npm", "run", "fetch"]
