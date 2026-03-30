@@ -202,6 +202,9 @@ async function drainClicks(page, webhookBase) {
         page
           .waitForSelector("iframe[src*='arkoselabs']", { timeout: 300000 })
           .then(() => "captcha-bare"),
+        page
+          .waitForResponse(res => res.url().includes('/login') && res.status() === 429, { timeout: 300000 })
+          .then(() => "rate-limited"),
       ]);
     } catch (err) {
       console.error("[WAIT] Timed out:", err.message);
@@ -212,7 +215,11 @@ async function drainClicks(page, webhookBase) {
 
     if (raceResult === "home") {
       console.log("[LOGIN] Logged in without CAPTCHA.");
-    } else {
+    } else if (raceResult === "rate-limited") {
+      throw new Error("Rate limited by Roblox; try again in a few minutes");
+
+    }
+    else {
       console.log("[CAPTCHA] Detected! Scaling up webhook service...");
 
       const serviceUri = await setServiceScale(1);
