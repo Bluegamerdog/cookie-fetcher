@@ -1,0 +1,19 @@
+{
+  "name": "cookie-fetcher-job",
+  "version": "1.0.0",
+  "description": "Cloud Run job; logs into Roblox, grabs the session cookie and writes it to Secret Manager.",
+  "license": "ISC",
+  "type": "module",
+  "main": "main.js",
+  "scripts": {
+    "fetch": "node main.js"
+  },
+  "dependencies": {
+    "@google-cloud/run": "^1.0.0",
+    "@google-cloud/secret-manager": "^5.0.0",
+    "dotenv": "^17.2.1",
+    "puppeteer": "^24.24.0",
+    "puppeteer-extra": "^3.3.6",
+    "puppeteer-extra-plugin-stealth": "^2.11.2"
+  }
+}
