@@ -1,0 +1,16 @@
+{
+  "name": "cookie-fetcher-service",
+  "version": "1.0.0",
+  "description": "Cloud Run service; webhook server for relaying CAPTCHA screenshots and clicks during cookie fetch.",
+  "license": "ISC",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "dotenv": "^17.2.1",
+    "express": "^5.2.1",
+    "ws": "^8.19.0"
+  }
+}
