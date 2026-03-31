@@ -37,15 +37,21 @@ async function setServiceScale(instanceCount) {
   return updated.uri;
 }
 
-async function waitForServiceReady(uri, timeoutMs = 60000) {
+async function waitForServiceReady(uri, timeoutMs = 300000) {
   const start = Date.now();
   console.log("[RUN] Waiting for service to be ready...");
   while (Date.now() - start < timeoutMs) {
     try {
-      const res = await fetch(`${uri}/health`);
-      if (res.ok) { console.log(`[RUN] Service is ready at ${uri}.`); return; }
-    } catch { }
-    await new Promise((r) => setTimeout(r, 2000));
+      const res = await fetch(`${uri}/health`, { signal: AbortSignal.timeout(5000) });
+      if (res.ok) {
+        console.log(`[RUN] Service is ready at ${uri}.`);
+        return;
+      }
+      console.log(`[RUN] Health check returned ${res.status}, retrying...`);
+    } catch (err) {
+      console.log(`[RUN] Health check failed (${err.message}), retrying...`);
+    }
+    await new Promise((r) => setTimeout(r, 3000));
   }
   throw new Error("Timed out waiting for webhook service to become ready");
 }
