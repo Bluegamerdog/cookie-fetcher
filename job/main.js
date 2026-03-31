@@ -259,14 +259,19 @@ async function drainClicks(page, webhookBase) {
 
       const homeReached = page
         .waitForFunction("window.location.href.includes('/home')", { timeout: 30 * 60 * 1000 })
-        .then(() => "home")
-        .catch(() => null);
+        .then(() => "home");
 
       const tokenReceived = pollForToken(tokenPollUrl)
-        .then((tok) => ({ type: "token", value: tok }))
-        .catch(() => null);
+        .then((tok) => ({ type: "token", value: tok }));
 
-      const result = await Promise.race([homeReached, tokenReceived]);
+      let result;
+
+      try {
+        result = await Promise.race([homeReached, tokenReceived]);
+      } catch (err) {
+        throw new Error(`CAPTCHA race has failed: ${err.message}`)
+      }
+
       solved = true;
       clearInterval(relay);
 
