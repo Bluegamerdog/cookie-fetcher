@@ -10,10 +10,9 @@ const server = createServer(app);
 const wss = new WebSocketServer({ server });
 const PORT = process.env.PORT || 8080;
 
-app.use(express.json());
-app.use(express.text({ type: "text/plain" }));
+app.use(express.json({ limit: "100kb" }));
+app.use(express.text({ type: "text/plain", limit: "100kb" }));
 
-let pendingToken = null;
 let latestScreenshot = null;
 const pendingClicks = [];
 const wsClients = new Set();
@@ -30,7 +29,18 @@ wss.on("connection", (ws) => {
   ws.on("message", (msg) => {
     try {
       const parsed = JSON.parse(msg);
+
       if (parsed.type === "click") {
+        if (
+          typeof parsed.x !== "number" ||
+          typeof parsed.y !== "number" ||
+          !Number.isFinite(parsed.x) ||
+          !Number.isFinite(parsed.y)
+        ) {
+          console.warn("[WS] Invalid click payload");
+          return;
+        }
+
         console.log("[WS] Click received:", parsed.x, parsed.y);
         pendingClicks.push({ x: parsed.x, y: parsed.y });
       }
@@ -50,41 +60,16 @@ wss.on("connection", (ws) => {
 function broadcast(msg) {
   const payload = JSON.stringify(msg);
   let sent = 0;
+
   for (const ws of wsClients) {
-    if (ws.readyState === 1) { ws.send(payload); sent++; }
+    if (ws.readyState === ws.OPEN) {
+      ws.send(payload);
+      sent++;
+    }
   }
+
   console.log("[WS] Broadcast:", msg.type, "→", sent, "clients");
 }
-
-// ── Token ────────────────────────────────────────────────────────────────────
-function parseBody(body) {
-  if (typeof body === "string") {
-    try { return JSON.parse(body); } catch { return {}; }
-  }
-  return body ?? {};
-}
-
-app.post("/captcha-token", (req, res) => {
-  const { token } = parseBody(req.body);
-  if (!token) {
-    console.warn("[TOKEN] Missing token");
-    return res.sendStatus(400);
-  }
-  pendingToken = token;
-  console.log("[TOKEN] Stored, length:", token.length);
-  broadcast({ type: "solved" });
-  res.sendStatus(200);
-});
-
-app.get("/captcha-token/latest", (req, res) => {
-  if (pendingToken) {
-    const token = pendingToken;
-    pendingToken = null;
-    console.log("[TOKEN] Consumed");
-    return res.json({ token });
-  }
-  res.json({ token: null });
-});
 
 // ── Screenshot ───────────────────────────────────────────────────────────────
 app.post(
@@ -102,10 +87,24 @@ app.post(
   }
 );
 
-app.get("/captcha-clicks", (req, res) => {
+app.get("/captcha-clicks", (_req, res) => {
   const clicks = pendingClicks.splice(0);
   if (clicks.length) console.log("[CLICKS] Draining:", clicks);
   res.json({ clicks });
+});
+
+app.post("/captcha-solved", (_req, res) => {
+  console.log("[SOLVED] Solver marked as solved");
+  broadcast({ type: "solved" });
+  res.sendStatus(200);
+});
+
+app.post("/captcha-reset", (_req, res) => {
+  pendingClicks.splice(0);
+  latestScreenshot = null;
+  console.log("[RESET] Cleared pending clicks and screenshot");
+  broadcast({ type: "reset" });
+  res.sendStatus(200);
 });
 
 // ── Solver UI ────────────────────────────────────────────────────────────────
@@ -129,10 +128,7 @@ app.get("/solve", (req, res) => {
       gap: 16px;
     }
     h2 { font-size: 18px; opacity: 0.8; }
-    #wrapper {
-      position: relative;
-      cursor: crosshair;
-    }
+    #wrapper { position: relative; cursor: crosshair; }
     #canvas {
       border-radius: 8px;
       display: block;
@@ -154,7 +150,10 @@ app.get("/solve", (req, res) => {
       animation: fade 0.6s forwards;
       z-index: 9999;
     }
-    @keyframes fade { 0% { opacity: 1; transform: translate(-50%, -50%) scale(1); } 100% { opacity: 0; transform: translate(-50%, -50%) scale(2); } }
+    @keyframes fade {
+      0% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+      100% { opacity: 0; transform: translate(-50%, -50%) scale(2); }
+    }
   </style>
 </head>
 <body>
@@ -170,7 +169,10 @@ app.get("/solve", (req, res) => {
     const status = document.getElementById('status');
     const debug = document.getElementById('debug');
 
-    function log(msg) { console.log(msg); debug.textContent = msg; }
+    function log(msg) {
+      console.log(msg);
+      debug.textContent = msg;
+    }
 
     function showClickDot(clientX, clientY) {
       const dot = document.createElement('div');
@@ -190,7 +192,13 @@ app.get("/solve", (req, res) => {
 
     ws.onmessage = (e) => {
       let msg;
-      try { msg = JSON.parse(e.data); } catch { log('Bad WS message'); return; }
+      try {
+        msg = JSON.parse(e.data);
+      } catch {
+        log('Bad WS message');
+        return;
+      }
+
       log('WS: ' + msg.type);
 
       if (msg.type === 'screenshot') {
@@ -200,6 +208,7 @@ app.get("/solve", (req, res) => {
           canvas.height = img.height;
           ctx.drawImage(img, 0, 0);
           status.textContent = 'Click to solve';
+          status.className = '';
           log('Frame: ' + img.width + 'x' + img.height);
         };
         img.onerror = () => log('Image decode failed');
@@ -210,12 +219,15 @@ app.get("/solve", (req, res) => {
         status.textContent = '✅ Solved! You can close this tab.';
         status.className = 'success';
       }
+
+      if (msg.type === 'reset') {
+        status.textContent = 'Waiting for CAPTCHA screenshot...';
+        status.className = '';
+      }
     };
 
     canvas.addEventListener('click', (e) => {
       const rect = canvas.getBoundingClientRect();
-
-      // Scale from rendered CSS pixels back to real screenshot pixels
       const scaleX = canvas.width / rect.width;
       const scaleY = canvas.height / rect.height;
       const x = Math.round((e.clientX - rect.left) * scaleX);
@@ -226,7 +238,11 @@ app.get("/solve", (req, res) => {
       ws.send(JSON.stringify({ type: 'click', x, y }));
     });
 
-    ws.onerror = (e) => { log('WS error'); console.error(e); };
+    ws.onerror = (e) => {
+      log('WS error');
+      console.error(e);
+    };
+
     ws.onclose = () => {
       status.textContent = 'Disconnected — refresh to reconnect.';
       log('WS closed');
@@ -237,6 +253,6 @@ app.get("/solve", (req, res) => {
 });
 
 // ── Health ───────────────────────────────────────────────────────────────────
-app.get("/health", (_, res) => res.json({ status: "ok" }));
+app.get("/health", (_req, res) => res.json({ status: "ok" }));
 
 server.listen(PORT, () => console.log(`[WEBHOOK] Listening on :${PORT}`));
