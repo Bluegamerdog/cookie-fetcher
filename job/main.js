@@ -21,12 +21,14 @@ const secretClient = new SecretManagerServiceClient();
 const runClient = new ServicesClient();
 
 // ── Cloud Run scaling ─────────────────────────────────────────
-async function setServiceScale(minInstances) {
+async function setServiceScale(instanceCount) {
   const name = `projects/${GCP_PROJECT_ID}/locations/${COOKIE_SERVICE_REGION}/services/${COOKIE_SERVICE_NAME}`;
-  console.log(`[RUN] Setting ${COOKIE_SERVICE_NAME} minInstances → ${minInstances}`);
+  console.log(`[RUN] Setting ${COOKIE_SERVICE_NAME} instanceCount → ${instanceCount}`);
 
   const [service] = await runClient.getService({ name });
-  service.template.scaling = { minInstanceCount: minInstances };
+  service.scaling = {
+    manual_instance_count: instanceCount,
+  };
 
   const [operation] = await runClient.updateService({ service });
   const [updated] = await operation.promise();
