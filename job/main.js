@@ -62,7 +62,7 @@ async function writeCookieToSecret(cookieValue) {
 }
 
 // ── Captcha helpers ───────────────────────────────────────────
-async function pollForToken(tokenPollUrl, intervalMs = 3000, timeoutMs = 15 * 60 * 1000) {
+async function pollForToken(tokenPollUrl, intervalMs = 3000, timeoutMs = 30 * 60 * 1000) {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
     await new Promise((r) => setTimeout(r, intervalMs));
