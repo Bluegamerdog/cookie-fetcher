@@ -249,12 +249,6 @@ async function drainClicks(page, webhookBase) {
         if (solved) return;
         await sendScreenshot(page, serviceUri);
         await drainClicks(page, serviceUri);
-
-        await page.mouse.move(
-          600 + Math.random() * 100,
-          400 * Math.random() * 100,
-          { steps: 3 }
-        );
       }, 500);
 
       const homeReached = page
