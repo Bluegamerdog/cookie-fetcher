@@ -252,7 +252,7 @@ async function drainClicks(page, webhookBase) {
       }, 500);
 
       const homeReached = page
-        .waitForFunction("window.location.href.includes('/home')", { timeout: 15 * 60 * 1000 })
+        .waitForFunction("window.location.href.includes('/home')", { timeout: 30 * 60 * 1000 })
         .then(() => "home")
         .catch(() => null);
 
