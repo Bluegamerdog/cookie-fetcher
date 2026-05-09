@@ -15,6 +15,7 @@ app.use(express.text({ type: "text/plain", limit: "100kb" }));
 
 let latestScreenshot = null;
 const pendingClicks = [];
+let pendingTwoFactorCode = null;
 const wsClients = new Set();
 
 // ── WebSocket ────────────────────────────────────────────────────────────────
@@ -43,6 +44,19 @@ wss.on("connection", (ws) => {
 
         console.log("[WS] Click received:", parsed.x, parsed.y);
         pendingClicks.push({ x: parsed.x, y: parsed.y });
+      }
+
+      if (parsed.type === "twoFactorCode") {
+        if (
+          typeof parsed.value !== "string" ||
+          !/^[0-9]{4,8}$/.test(parsed.value)
+        ) {
+          console.warn("[WS] Invalid 2FA payload");
+          return;
+        }
+
+        console.log("[WS] 2FA code received:", parsed.value.length, "digits");
+        pendingTwoFactorCode = parsed.value;
       }
     } catch (err) {
       console.error("[WS] Bad message:", err.message);
@@ -93,6 +107,17 @@ app.get("/captcha-clicks", (_req, res) => {
   res.json({ clicks });
 });
 
+app.get("/two-factor-code", (_req, res) => {
+  const code = pendingTwoFactorCode;
+  pendingTwoFactorCode = null;
+
+  if (code) {
+    console.log("[2FA] Draining code:", code.length, "digits");
+  }
+
+  res.json({ code });
+});
+
 app.post("/captcha-solved", (_req, res) => {
   console.log("[SOLVED] Solver marked as solved");
   broadcast({ type: "solved" });
@@ -101,6 +126,7 @@ app.post("/captcha-solved", (_req, res) => {
 
 app.post("/captcha-reset", (_req, res) => {
   pendingClicks.splice(0);
+  pendingTwoFactorCode = null;
   latestScreenshot = null;
   console.log("[RESET] Cleared pending clicks and screenshot");
   broadcast({ type: "reset" });
@@ -150,6 +176,23 @@ app.get("/solve", (req, res) => {
       animation: fade 0.6s forwards;
       z-index: 9999;
     }
+    #twoFactorBox {
+      display: flex;
+      gap: 8px;
+    }
+    #twoFactorCode {
+      padding: 8px 10px;
+      border-radius: 6px;
+      border: 1px solid #555;
+      background: #0f0f1f;
+      color: white;
+    }
+    #sendTwoFactor {
+      padding: 8px 12px;
+      border-radius: 6px;
+      border: none;
+      cursor: pointer;
+    }
     @keyframes fade {
       0% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
       100% { opacity: 0; transform: translate(-50%, -50%) scale(2); }
@@ -163,6 +206,16 @@ app.get("/solve", (req, res) => {
   </div>
   <p id="status">Connecting...</p>
   <p id="debug"></p>
+  <div id="twoFactorBox">
+    <input
+      id="twoFactorCode"
+      inputmode="numeric"
+      pattern="[0-9]*"
+      maxlength="8"
+      placeholder="2FA code"
+    />
+    <button id="sendTwoFactor">Send 2FA</button>
+  </div>
   <script>
     const canvas = document.getElementById('canvas');
     const ctx = canvas.getContext('2d');
@@ -247,6 +300,19 @@ app.get("/solve", (req, res) => {
       status.textContent = 'Disconnected — refresh to reconnect.';
       log('WS closed');
     };
+    document.getElementById('sendTwoFactor').addEventListener('click', () => {
+      const input = document.getElementById('twoFactorCode');
+      const value = input.value.trim();
+
+      if (!/^[0-9]{4,8}$/.test(value)) {
+        status.textContent = 'Invalid 2FA code';
+        return;
+      }
+
+      ws.send(JSON.stringify({ type: 'twoFactorCode', value }));
+      input.value = '';
+      status.textContent = '2FA code sent';
+    });
   </script>
 </body>
 </html>`);
