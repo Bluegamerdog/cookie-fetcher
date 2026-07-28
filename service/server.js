@@ -2,6 +2,7 @@ import express from "express";
 import { createServer } from "http";
 import { WebSocketServer } from "ws";
 import { configDotenv } from "dotenv";
+import { JobsClient } from "@google-cloud/run";
 
 configDotenv();
 
@@ -10,6 +11,13 @@ const server = createServer(app);
 const wss = new WebSocketServer({ server });
 const PORT = process.env.PORT || 8080;
 
+// Cloud Run Job `job` gets triggered from here, not by the API — the API only ever
+// connects to us over WS and asks for a refresh; we're the one talking to Cloud Run.
+const GCP_PROJECT_ID = process.env.GCP_PROJECT_ID;
+const COOKIE_JOB_NAME = process.env.COOKIE_JOB_NAME;
+const COOKIE_JOB_REGION = process.env.COOKIE_JOB_REGION || "europe-west1";
+const jobsClient = new JobsClient();
+
 app.use(express.json({ limit: "100kb" }));
 app.use(express.text({ type: "text/plain", limit: "100kb" }));
 
@@ -17,6 +25,7 @@ let latestScreenshot = null;
 const pendingClicks = [];
 let pendingTwoFactorCode = null;
 const wsClients = new Set();
+let jobRunning = false;
 
 // ── WebSocket ────────────────────────────────────────────────────────────────
 wss.on("connection", (ws) => {
@@ -58,6 +67,13 @@ wss.on("connection", (ws) => {
         console.log("[WS] 2FA code received:", parsed.value.length, "digits");
         pendingTwoFactorCode = parsed.value;
       }
+
+      // The API (cookie bridge) sends this right after connecting — it's the only
+      // thing that starts `job`. Other WS clients (e.g. the /solve browser tab) never
+      // send this, so their connecting doesn't trigger a fetch.
+      if (parsed.type === "triggerRefresh") {
+        triggerJob(ws);
+      }
     } catch (err) {
       console.error("[WS] Bad message:", err.message);
     }
@@ -83,6 +99,54 @@ function broadcast(msg) {
   }
 
   console.log("[WS] Broadcast:", msg.type, "→", sent, "clients");
+}
+
+// ── Job trigger ──────────────────────────────────────────────────────────────
+// We're the only thing that starts `job` — the requesting WS connection (`requester`)
+// doesn't need to be the one that gets the resulting status updates, since those are
+// broadcast to everyone and `job` itself reports back to us over plain HTTP.
+async function triggerJob(requester) {
+  if (jobRunning) {
+    console.warn("[JOB] Refresh requested but a job is already running; ignoring.");
+    requester.send(
+      JSON.stringify({
+        type: "jobStatus",
+        status: "starting",
+        message: "Refresh already in progress",
+      })
+    );
+    return;
+  }
+
+  if (!GCP_PROJECT_ID || !COOKIE_JOB_NAME) {
+    console.error("[JOB] Cannot trigger job — GCP_PROJECT_ID or COOKIE_JOB_NAME not configured");
+    requester.send(
+      JSON.stringify({
+        type: "jobStatus",
+        status: "error",
+        message: "Job trigger is not configured on the cookie-fetcher service",
+      })
+    );
+    return;
+  }
+
+  const name = `projects/${GCP_PROJECT_ID}/locations/${COOKIE_JOB_REGION}/jobs/${COOKIE_JOB_NAME}`;
+  console.log("[JOB] Triggering Cloud Run Job execution:", name);
+  jobRunning = true;
+
+  try {
+    // Don't await the execution's own long-running operation — `job` reports its
+    // progress back over /job-status, which we broadcast over WS instead.
+    await jobsClient.runJob({ name });
+  } catch (err) {
+    jobRunning = false;
+    console.error("[JOB] Failed to trigger job execution:", err.message);
+    broadcast({
+      type: "jobStatus",
+      status: "error",
+      message: `Failed to trigger job execution: ${err.message}`,
+    });
+  }
 }
 
 // ── Screenshot ───────────────────────────────────────────────────────────────
@@ -135,7 +199,7 @@ app.post("/captcha-reset", (_req, res) => {
 
 // ── Job status bridge ───────────────────────────────────────────────────────
 // `job` runs once and reports its lifecycle here; we broadcast it to whoever's
-// listening over WS (e.g. the API's cookie bridge).
+// listening over WS (e.g. the API's cookie bridge), and use it to track jobRunning.
 const JOB_STATUSES = new Set([
   "starting",
   "captcha-detected",
@@ -163,6 +227,13 @@ app.post("/job-status", (req, res) => {
     pendingClicks.splice(0);
     pendingTwoFactorCode = null;
     latestScreenshot = null;
+    // Also covers a job started outside triggerJob (e.g. dev, or a human via gcloud) —
+    // either way, we now know a run is in progress and shouldn't start another.
+    jobRunning = true;
+  }
+
+  if (status === "success" || status === "error") {
+    jobRunning = false;
   }
 
   broadcast({ type: "jobStatus", status, message });
