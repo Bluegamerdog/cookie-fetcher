@@ -133,6 +133,47 @@ app.post("/captcha-reset", (_req, res) => {
   res.sendStatus(200);
 });
 
+// ── Job status bridge ───────────────────────────────────────────────────────
+// `job` runs once and reports its lifecycle here; we broadcast it to whoever's
+// listening over WS (e.g. the API's cookie bridge).
+const JOB_STATUSES = new Set([
+  "starting",
+  "captcha-detected",
+  "awaiting-solve",
+  "solved",
+  "success",
+  "error",
+]);
+
+app.post("/job-status", (req, res) => {
+  const { status, message } = req.body || {};
+
+  if (typeof status !== "string" || !JOB_STATUSES.has(status)) {
+    console.warn("[JOB] Invalid status payload:", status);
+    return res.sendStatus(400);
+  }
+  if (message !== undefined && typeof message !== "string") {
+    console.warn("[JOB] Invalid message payload");
+    return res.sendStatus(400);
+  }
+
+  console.log("[JOB] Status:", status, message ? `— ${message}` : "");
+
+  if (status === "starting") {
+    pendingClicks.splice(0);
+    pendingTwoFactorCode = null;
+    latestScreenshot = null;
+  }
+
+  broadcast({ type: "jobStatus", status, message });
+
+  if (status === "success") {
+    broadcast({ type: "cookieReady" });
+  }
+
+  res.sendStatus(200);
+});
+
 // ── Solver UI ────────────────────────────────────────────────────────────────
 app.get("/solve", (req, res) => {
   res.send(`<!DOCTYPE html>

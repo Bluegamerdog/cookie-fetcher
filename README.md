@@ -9,15 +9,16 @@ Run with:
 ```
 npm run fetch
 ```
+`job/main.js` runs once, does the login/fetch flow described above, and exits — it's meant to be triggered on demand (e.g. by scipnet-api's cookie bridge, which turns it on once per refresh and lets it finish on its own) rather than run continuously. `service/server.js` is the opposite: it's meant to stay running permanently as the always-on relay/status endpoint `job` reports to (`COOKIE_SERVICE_URL`) and, if a CAPTCHA comes up, the webhook a human solves it through.
+
 ---
 Personally, I used this as follows:
-- Upload as (private) Docker image and upload to artifact registry on Google Cloud Platform (GCP)
-- Use Docker image to create a GCP Cloud Run Job
-- Connect Cloud Run Job to a VPC Network for outbound traffic
-  - Serverless APC Access connector > Select your created VPC Network and select "Route all traffic to the VPC"
-- The project that needs the Cookie goes through a similar process (create a VM, Cloud Run Service, etc.)
-- Make sure that the Cloud Run Service or Virtual Machine is using the same VPC Network as the Cloud Run Job was on when fetching the cookie.
-- Grab cookie from Cloud Run Job's logs
-- Add copied cookie as enviornment variable in the Cloud Run Service or Virtual Machine
-- Delete logs or limit access to the job's logs to make sure no one else can grab it in plain text after
-- Profit
+- Upload as (private) Docker images and upload to artifact registry on Google Cloud Platform (GCP)
+- Use the `service` image to create a GCP Cloud Run **Service** that stays up (not scaled to zero — `job` and any callers need it reachable at all times)
+- Use the `job` image to create a GCP Cloud Run **Job** — it runs to completion and stops on its own each time it's executed
+- Connect both to a VPC Network for outbound traffic
+  - Serverless VPC Access connector > Select your created VPC Network and select "Route all traffic to the VPC"
+- The project that needs the cookie goes through a similar process (create a VM, Cloud Run Service, etc.)
+- Make sure that consumer is using the same VPC Network `job` is on when fetching the cookie
+- `job` writes the cookie straight to Secret Manager (`SECRET_NAME`) on success — no need to copy it out of logs
+- Grant the consumer's service account access to read that secret
